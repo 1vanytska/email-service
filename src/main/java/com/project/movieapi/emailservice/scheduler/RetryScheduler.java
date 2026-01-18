@@ -18,13 +18,23 @@ public class RetryScheduler {
     private final EmailLogRepository repository;
     private final EmailSenderService emailService;
 
+    private static final int MAX_ATTEMPTS = 10;
+
     @Scheduled(fixedRate = 300000)
     public void retryFailedEmails() {
         log.info("Starting retry job...");
         List<EmailLog> failedEmails = repository.findByStatus("FAILED");
 
         for (EmailLog email : failedEmails) {
-            log.info("Retrying email id: {}", email.getId());
+            if (email.getAttemptCount() >= MAX_ATTEMPTS) {
+                log.warn("Email id: {} reached max attempts ({}). Marking as CANCELLED.", email.getId(), MAX_ATTEMPTS);
+                email.setStatus("CANCELLED");
+                email.setErrorMessage("Max retry attempts reached. Stopping.");
+                repository.save(email);
+                continue;
+            }
+
+            log.info("Retrying email id: {}, attempt: {}", email.getId(), email.getAttemptCount() + 1);
             emailService.trySend(email);
         }
     }

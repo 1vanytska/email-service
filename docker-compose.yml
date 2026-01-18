@@ -8,6 +8,11 @@ services:
       - "15672:15672"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.27
@@ -18,6 +23,12 @@ services:
       - "9200:9200"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.27
@@ -26,7 +37,8 @@ services:
     environment:
       ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -40,6 +52,11 @@ services:
       - "5432:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   email-service:
     build: .
@@ -54,8 +71,10 @@ services:
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
     depends_on:
-      - rabbitmq
-      - elasticsearch
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -71,8 +90,10 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
     depends_on:
-      - rabbitmq
-      - postgres
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
 
